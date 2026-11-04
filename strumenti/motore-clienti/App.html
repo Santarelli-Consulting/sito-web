@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motore Clienti Santarelli</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+
+/* Layout: cabina di regia — barra comandi fissa, viste a schede, dati in tabelle e colonne di pipeline */
+:root{
+  --bg:#F6F7F8; --surface:#FFFFFF; --sunk:#EEF0F2; --line:#D9DCE0;
+  --ink:#1C1D20; --text:#3D3F44; --muted:#6F727A;
+  --brand:#C8102E; --brand-ink:#FFFFFF; --brand-tint:#FBEEF0;
+  --ok:#1E7A4C; --ok-tint:#E5F3EC; --warn:#A35D00; --warn-tint:#FCF1E0; --crit:#B3122B; --crit-tint:#FBE9EC;
+  --display:"Manrope",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141518; --surface:#1C1E22; --sunk:#24272C; --line:#33373D;
+  --ink:#F1F2F4; --text:#C9CCD2; --muted:#9296A0;
+  --brand:#E8384F; --brand-ink:#FFFFFF; --brand-tint:#3A1A20;
+  --ok:#4CC28A; --ok-tint:#17322A; --warn:#E6A44A; --warn-tint:#3A2C16; --crit:#F0687C; --crit-tint:#3D1A21; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141518; --surface:#1C1E22; --sunk:#24272C; --line:#33373D;
+  --ink:#F1F2F4; --text:#C9CCD2; --muted:#9296A0;
+  --brand:#E8384F; --brand-ink:#FFFFFF; --brand-tint:#3A1A20;
+  --ok:#4CC28A; --ok-tint:#17322A; --warn:#E6A44A; --warn-tint:#3A2C16; --crit:#F0687C; --crit-tint:#3D1A21; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:12px}
+.brand{font-family:var(--display);font-weight:800;color:var(--ink);font-size:17px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.brand i{display:inline-block;width:10px;height:10px;background:var(--brand);border-radius:2px}
+.brand span{color:var(--muted);font-weight:600}
+nav{display:flex;gap:4px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none}
+nav a{font:600 14px var(--body);color:var(--muted);text-decoration:none;padding:7px 11px;border-radius:6px;white-space:nowrap}
+nav a:hover{color:var(--ink);background:var(--sunk)}
+nav a[aria-current="page"]{color:var(--brand);background:var(--brand-tint)}
+main{padding-block:24px 64px}
+h1,h2,h3{font-family:var(--display);color:var(--ink);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:26px;font-weight:800}
+h2{font-size:19px;font-weight:700}
+h3{font-size:15.5px;font-weight:700}
+p{margin:0}
+.lede{color:var(--muted);max-width:68ch;margin-top:6px}
+.stack{display:flex;flex-direction:column;gap:20px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;min-width:0}
+.eyebrow{font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.kpi .n{font:800 34px/1.1 var(--display);color:var(--ink);font-variant-numeric:tabular-nums;margin-top:6px}
+.kpi .n small{font-size:16px;color:var(--muted);font-weight:700}
+.kpi .s{color:var(--muted);font-size:13px;margin-top:4px}
+.kpi.hit .n{color:var(--ok)}
+.meter{height:6px;background:var(--sunk);border-radius:3px;margin-top:10px;overflow:hidden}
+.meter b{display:block;height:100%;background:var(--brand);border-radius:3px}
+.kpi.hit .meter b{background:var(--ok)}
+button,.btn{font:600 14px var(--body);border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+button.primary:hover{filter:brightness(1.07)}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:6px 8px}
+button.ghost:hover{color:var(--ink);background:var(--sunk)}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+textarea{min-height:84px;resize:vertical}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+.form{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.form .full{grid-column:1/-1}
+.chip{display:inline-flex;align-items:center;gap:5px;font:500 12px var(--mono);padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--text);white-space:nowrap}
+.chip.ok{background:var(--ok-tint);color:var(--ok)}
+.chip.warn{background:var(--warn-tint);color:var(--warn)}
+.chip.crit{background:var(--crit-tint);color:var(--crit)}
+.chip.brand{background:var(--brand-tint);color:var(--brand)}
+.list{display:flex;flex-direction:column}
+.item{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item .t{color:var(--ink);font-weight:600;min-width:0;overflow-wrap:anywhere}
+.item .d{color:var(--muted);font-size:13px}
+.stripe{width:4px;height:34px;border-radius:2px;background:var(--line)}
+.stripe.crit{background:var(--crit)} .stripe.warn{background:var(--warn)} .stripe.ok{background:var(--ok)} .stripe.brand{background:var(--brand)}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:22px;color:var(--muted);text-align:left}
+.empty b{color:var(--ink)}
+.funnel{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.frow{display:grid;grid-template-columns:110px 1fr 40px;gap:10px;align-items:center;font-size:13px}
+.frow .bar2{height:18px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.frow .bar2 b{display:block;height:100%;background:var(--brand);opacity:.85;min-width:2px}
+.frow .v{font-family:var(--mono);color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+.board-scroll{overflow-x:auto;padding-bottom:8px}
+.board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(230px,1fr);gap:12px;min-width:min-content}
+.col{background:var(--sunk);border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:8px;min-height:120px}
+.col h3{font-size:13px;display:flex;justify-content:space-between;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-family:var(--body)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:5px;width:100%;font-weight:400}
+.card:hover{border-color:var(--brand)}
+.card .t{font-weight:600;color:var(--ink)}
+.card .m{font-size:12.5px;color:var(--muted)}
+.drawer-bg{position:fixed;inset:0;background:rgba(10,10,12,.45);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,100%);background:var(--bg);z-index:21;overflow-y:auto;border-left:1px solid var(--line);padding:calc(18px + env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) calc(28px + env(safe-area-inset-bottom,0px)) 18px}
+.drawer .head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:14px}
+.out{white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;font-size:14.5px;color:var(--ink);min-height:60px;overflow-wrap:anywhere}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font:500 11.5px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+td b{color:var(--ink)}
+.play{display:flex;flex-direction:column;gap:8px}
+.play .num{font:500 12px var(--mono);color:var(--brand)}
+.play ul,.panel ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.src{font-size:12.5px;color:var(--muted)}
+.src a{color:var(--muted)}
+a{color:var(--brand)}
+.check{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line);font-weight:400;color:var(--text);font-size:14.5px;flex-direction:row}
+.check:first-child{border-top:0}
+.check input{width:18px;height:18px;margin-top:2px;flex:none;accent-color:var(--brand)}
+.check.done span{text-decoration:line-through;color:var(--muted)}
+.note{overflow-wrap:anywhere;background:var(--warn-tint);color:var(--warn);border-radius:6px;padding:10px 12px;font-size:13.5px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;font-weight:600;z-index:30;font-size:14px}
+.agent{display:flex;flex-direction:column;gap:10px}
+.agent .where{font-size:12.5px;color:var(--muted)}
+@media (max-width:640px){nav{flex-basis:100%}h1{font-size:22px}.frow{grid-template-columns:86px 1fr 32px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+body{margin:0}
+.bz{display:flex;flex-direction:column;gap:8px;padding:14px 0;border-top:1px solid var(--line)}
+.bz:first-child{border-top:0}
+.bz input,.bz textarea{font-size:14px}
+.bz textarea{min-height:130px}
+.busy{opacity:.6;pointer-events:none}
+.logrow{display:grid;grid-template-columns:130px 140px 1fr;gap:10px;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}
+@media (max-width:640px){.logrow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <div class="brand"><i></i>Santarelli <span>Motore Clienti</span></div>
+    <nav id="nav" aria-label="Sezioni">
+      <a href="#oggi">Oggi</a><a href="#pipeline">Pipeline</a><a href="#partner">Partner</a><a href="#scadenze">Scadenze</a><a href="#agenti">Agenti</a><a href="#impostazioni">Impostazioni</a><a href="#strategia">Strategia</a>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="app"><div class="empty"><b>Caricamento…</b> Lettura dell'archivio su Google Fogli.</div></main>
+<div id="toast" class="toast" hidden></div>
+<script>
+const STAGES=[{k:'nuovo',l:'Da contattare'},{k:'contattato',l:'Contattato'},{k:'risposto',l:'Ha risposto'},{k:'call',l:'Call fissata'},{k:'preventivo',l:'Preventivo inviato'},{k:'contratto',l:'Contratto firmato'},{k:'perso',l:'Perso / escluso'}];
+const CANALI={segnale:'Freddo a segnale',partner:'Da partner',inbound:'Inbound (sito, Google)',rete:'Rete personale',freddo:'Freddo generico'};
+const SERVIZI=['Corso datore di lavoro','Corso lavoratori','Corso preposti','Antincendio (corso)','Antincendio (VRI + piano emergenza)','Primo soccorso','DVR','RSPP esterno','Abbonamento Sicurezza','Altro'];
+const PARTNER_TIPI=['Consulente del lavoro','Commercialista','Manutentore estintori','Agenzia per il lavoro','Associazione di categoria','Medico competente','Altro'];
+const ADEMPIMENTI=['Aggiornamento lavoratori','Aggiornamento preposti','Aggiornamento antincendio','Aggiornamento primo soccorso','Aggiornamento RLS','Revisione DVR','Prova di evacuazione','Rinnovo nomina RSPP','Altro'];
+const AGENTI=[
+ {k:'cercatore',n:'Cercatore a segnale',q:'Ogni giorno alle 6',c:'Cerca su Google aziende con un motivo per comprare adesso (assunzioni, nuove sedi, cantieri) e le inserisce in Pipeline con la fonte.'},
+ {k:'partner',n:'Cercatore partner',q:'Ogni lunedì alle 6',c:'Trova consulenti del lavoro, commercialisti, manutentori di estintori e agenzie per il lavoro, e prepara la proposta di collaborazione.'},
+ {k:'redattore',n:'Redattore',q:'Ogni giorno alle 6',c:'Scrive il primo messaggio per ogni nuova azienda con email, citando il suo segnale.'},
+ {k:'rimandatore',n:'Rimandatore',q:'Ogni giorno alle 6',c:'Follow-up dopo 3 giorni, ultimo messaggio dopo altri 4, poi chiude la scheda.'},
+ {k:'risposte',n:'Lettore risposte',q:'Ogni 2 ore',c:'Legge le risposte in Gmail: sposta la scheda in “Ha risposto” e ti avvisa; chi scrive NO viene escluso.'},
+ {k:'scadenziere',n:'Scadenziere',q:'Ogni giorno alle 6',c:'90 giorni prima di ogni scadenza dei clienti prepara la proposta di rinnovo.'},
+ {k:'analista',n:'Analista',q:'Ogni venerdì alle 17',c:'Ti manda via email il report della settimana con 3 correzioni.'}
+];
+let D=null;const S={filtro:'tutti',open:null};
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const daysTo=iso=>iso?Math.round((new Date(iso+'T12:00:00')-new Date(todayISO()+'T12:00:00'))/864e5):null;
+const fmtD=iso=>iso?new Date(iso+'T12:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short'}):'—';
+const stageLabel=k=>(STAGES.find(s=>s.k===k)||{}).l||k;
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,3200)}
+async function copy(t){try{await navigator.clipboard.writeText(t);toast('Copiato')}catch(e){toast('Seleziona il testo e copia a mano')}}
+function call(fn,...args){return new Promise((res,rej)=>google.script.run.withSuccessHandler(res).withFailureHandler(e=>rej(e))[fn](...args))}
+async function run(fn,args,btn,okMsg){
+  if(btn){btn.disabled=true;btn.dataset.t=btn.textContent;btn.textContent='Attendi…'}
+  try{const r=await call(fn,...(args||[]));if(r&&r.lead){D=r;render()}if(okMsg||(r&&r.messaggio))toast((r&&r.messaggio)||okMsg);return r}
+  catch(e){toast(e.message||String(e));}
+  finally{if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent=btn.dataset.t}}
+}
+
+const VIEWS={oggi:vOggi,pipeline:vPipeline,partner:vPartner,scadenze:vScadenze,agenti:vAgenti,impostazioni:vImpostazioni,strategia:vStrategia};
+function current(){const h=location.hash.slice(1);return VIEWS[h]?h:'oggi'}
+function render(){
+  if(!D)return;const v=current();
+  document.querySelectorAll('#nav a').forEach(a=>a.setAttribute('aria-current',a.getAttribute('href')==='#'+v?'page':'false'));
+  const y=window.scrollY;$('#app').innerHTML=VIEWS[v]();bind(v);window.scrollTo(0,y);
+}
+
+function vOggi(){
+  const st=D.stat,c=D.config;const hit=st.contrattiSettimana>=1;const max=Math.max(1,...STAGES.map(s=>st.fasi[s.k]||0));
+  const avviso=!D.haChiave?`<div class="note">Manca la chiave AI: gli agenti non possono scrivere né cercare. Vai in <a href="#impostazioni">Impostazioni</a> (2 minuti).</div>`:'';
+  return `<div class="stack">${avviso}
+  <div><div class="eyebrow">Modalità ${c.MODALITA==='AUTO'?'automatica':'con approvazione'} · ${D.inviatiOggi}/${esc(c.MAX_INVII_GIORNO)} invii oggi</div><h1>Obiettivo: 1 contratto a settimana</h1>
+  <p class="lede">Gli agenti lavorano da soli ogni mattina. Tu approvi le email qui sotto e rispondi a chi risponde.</p></div>
+  <div class="grid g4">
+   <div class="panel kpi ${hit?'hit':''}"><div class="eyebrow">Contratti settimana</div><div class="n">${st.contrattiSettimana}<small> / 1</small></div><div class="meter"><b style="width:${Math.min(100,st.contrattiSettimana*100)}%"></b></div></div>
+   <div class="panel kpi"><div class="eyebrow">Email inviate settimana</div><div class="n">${st.emailInviateSettimana}<small> / 60</small></div><div class="meter"><b style="width:${Math.min(100,st.emailInviateSettimana/60*100)}%"></b></div></div>
+   <div class="panel kpi"><div class="eyebrow">Risposte settimana</div><div class="n">${st.risposteSettimana}</div><div class="s">Ogni risposta: proponi la call entro 48 ore</div></div>
+   <div class="panel kpi"><div class="eyebrow">Partner attivi</div><div class="n">${st.partnerAttivi}<small> / 5</small></div><div class="meter"><b style="width:${Math.min(100,st.partnerAttivi/5*100)}%"></b></div></div>
+  </div>
+  <div class="panel"><div class="row" style="justify-content:space-between"><h2>Email pronte da approvare</h2>
+   <div class="row">${D.bozze.length?`<button class="primary" id="approvaTutte">Approva e invia tutte (${D.bozze.length})</button>`:''}</div></div>
+   <div style="margin-top:6px">${D.bozze.length?D.bozze.map(b=>`<div class="bz" data-bz="${b.id}">
+     <div class="row" style="justify-content:space-between"><div><span class="chip ${b.tipo==='primo'?'brand':b.tipo==='partner'?'ok':''}">${esc(b.tipo)}</span> <b style="color:var(--ink)">${esc(b.a)}</b></div><span class="src">${fmtD(b.creata)}</span></div>
+     <input id="ogg_${b.id}" value="${esc(b.oggetto)}" aria-label="Oggetto">
+     <textarea id="corpo_${b.id}" aria-label="Testo">${esc(b.corpo)}</textarea>
+     ${b.errore?`<div class="note">${esc(b.errore)}</div>`:''}
+     <div class="row"><button class="primary" data-approva="${b.id}">Approva e invia</button><button class="ghost" data-scarta="${b.id}">Scarta</button><span class="src">Firma e riga per non essere ricontattati vengono aggiunte in automatico.</span></div>
+   </div>`).join(''):`<div class="empty"><b>Nessuna email in attesa.</b><br>Gli agenti preparano le prossime domattina alle 6. Puoi farli partire subito da <a href="#agenti">Agenti</a>.</div>`}</div>
+  </div>
+  <div class="grid g2">
+   <div class="panel"><h2>Azioni per te</h2><div class="list" style="margin-top:8px">${D.azioni.length?D.azioni.slice(0,12).map(a=>`<div class="item"><div class="stripe ${a.tipo==='scadenza'?'crit':a.tipo==='partner'?'ok':'brand'}"></div><div><div class="t">${esc(a.t)}</div><div class="d">${esc(a.d)}</div></div><button class="ghost" data-apri="${a.tipo}" data-id="${a.id}">Apri</button></div>`).join(''):`<div class="empty">Niente da fare a mano oggi.</div>`}</div></div>
+   <div class="panel"><h2>Imbuto</h2><div class="funnel">${STAGES.map(s=>`<div class="frow"><span>${s.l}</span><div class="bar2"><b style="width:${(st.fasi[s.k]||0)/max*100}%"></b></div><span class="v">${st.fasi[s.k]||0}</span></div>`).join('')}</div>
+   <p class="src" style="margin-top:10px">A freddo servono circa 200 contatti per 1 firma; da partner o con un segnale molti meno. Il venerdì l’Analista misura i tuoi tassi reali.</p></div>
+  </div></div>`;
+}
+function leadCard(l){const n=daysTo(l.dataProssima);const due=n!==null&&n<=0&&!['contratto','perso','contattato'].includes(l.stato);
+  return `<button class="card" data-lead="${l.id}"><span class="t">${esc(l.azienda)}</span><span class="m">${esc(l.settore||'')}${l.provincia?' · '+esc(l.provincia):''}</span><span class="row" style="gap:6px">${l.servizio?`<span class="chip">${esc(l.servizio)}</span>`:''}${!l.email?'<span class="chip warn">senza email</span>':''}${due?'<span class="chip crit">da fare</span>':''}</span></button>`}
+function vPipeline(){const ls=D.lead.filter(l=>S.filtro==='tutti'||l.canale===S.filtro);
+  return `<div class="stack"><div class="row" style="justify-content:space-between"><div><h1>Pipeline clienti</h1><p class="lede">Le aziende trovate dagli agenti e quelle che aggiungi tu.</p></div><button class="primary" id="addLead">Aggiungi azienda</button></div>
+  <div class="row"><label style="flex-direction:row;align-items:center;gap:8px">Canale <select id="fCanale" style="width:auto"><option value="tutti">Tutti</option>${Object.entries(CANALI).map(([k,v])=>`<option value="${k}" ${S.filtro===k?'selected':''}>${v}</option>`).join('')}</select></label><span class="src">${ls.length} schede</span></div>
+  ${D.lead.length?`<div class="board-scroll"><div class="board">${STAGES.map(s=>{const x=ls.filter(l=>(l.stato||'nuovo')===s.k);return `<div class="col"><h3><span>${s.l}</span><span>${x.length}</span></h3>${x.map(leadCard).join('')}</div>`}).join('')}</div></div>`:`<div class="empty"><b>Pipeline vuota.</b><br>Il Cercatore la riempie domattina. Per partire subito: <a href="#agenti">Agenti</a> → Cercatore → Esegui ora.</div>`}</div>`}
+function vPartner(){return `<div class="stack"><div class="row" style="justify-content:space-between"><div><h1>Partner</h1><p class="lede">Chi segue già decine di aziende e può presentarti. Un accordo vale centinaia di mail a freddo.</p></div><button class="primary" id="addPartner">Aggiungi partner</button></div>
+  ${D.partner.length?`<div class="panel"><div class="list">${D.partner.map(p=>`<div class="item"><div class="stripe ${p.stato==='attivo'?'ok':'brand'}"></div><div><div class="t">${esc(p.nome)}</div><div class="d">${esc(p.tipo)} · ${esc(p.citta)} · ${esc(p.stato||'da contattare')}${p.email?'':' · senza email'}</div></div><button class="ghost" data-partner="${p.id}">Apri</button></div>`).join('')}</div></div>`:`<div class="empty"><b>Nessun partner.</b><br>Il Cercatore partner gira il lunedì. Puoi farlo partire ora da <a href="#agenti">Agenti</a>.</div>`}</div>`}
+function vScadenze(){const sc=[...D.scadenze].sort((a,b)=>(a.dataScadenza||'').localeCompare(b.dataScadenza||''));
+  return `<div class="stack"><div><h1>Scadenziario clienti</h1><p class="lede">Ogni corso o documento consegnato ha una scadenza. Registrala con l’email del cliente: 90 giorni prima l’agente prepara la proposta di rinnovo.</p></div>
+  <div class="panel"><form id="fScad" class="form"><label>Cliente<input id="sc_cliente" required></label><label>Email cliente<input id="sc_email" type="email"></label><label>Adempimento<select id="sc_adem">${ADEMPIMENTI.map(a=>`<option>${a}</option>`).join('')}</select></label><label>Data di scadenza<input id="sc_data" type="date" required></label><label>Persone<input id="sc_persone" type="number" min="0"></label><label>Note<input id="sc_note"></label><div class="full"><button class="primary" type="submit">Salva scadenza</button></div></form></div>
+  ${sc.length?`<div class="panel"><div class="list">${sc.map(s=>{const n=daysTo(s.dataScadenza);const cls=s.stato==='rinnovato'?'ok':n<=30?'crit':n<=90?'warn':'';return `<div class="item"><div class="stripe ${cls}"></div><div><div class="t">${esc(s.cliente)} · ${esc(s.adempimento)}</div><div class="d">${fmtD(s.dataScadenza)} · ${s.stato==='rinnovato'?'rinnovato':n<0?'scaduto':'tra '+n+' giorni'}${s.propostaInviata==='SI'?' · proposta inviata':''}</div></div><div class="row" style="gap:4px">${s.stato!=='rinnovato'?`<button class="ghost" data-rinn="${s.id}">Rinnovato</button>`:''}<button class="ghost" data-delsc="${s.id}">✕</button></div></div>`}).join('')}</div></div>`:''}</div>`}
+function vAgenti(){return `<div class="stack"><div><h1>Agenti automatici</h1><p class="lede">Girano da soli sui server Google, anche a computer spento. “Esegui ora” li fa partire subito.</p></div>
+  <div class="grid g3">${AGENTI.map(a=>`<div class="panel agent"><div class="row" style="justify-content:space-between"><h3>${a.n}</h3><span class="chip ok">${a.q}</span></div><p>${a.c}</p><div><button data-esegui="${a.k}">Esegui ora</button></div></div>`).join('')}</div>
+  <div class="panel"><h2>Registro attività</h2><div style="margin-top:8px">${D.log.length?D.log.map(r=>`<div class="logrow"><span class="src">${esc(r.data)}</span><b style="color:var(--ink)">${esc(r.agente)}</b><span>${esc(r.esito)}</span></div>`).join(''):'<div class="empty">Nessuna attività registrata.</div>'}</div></div></div>`}
+function vImpostazioni(){const c=D.config;const f=(k,l,t)=>`<label>${l}<input id="cfg_${k}" ${t||''} value="${esc(c[k])}"></label>`;
+  return `<div class="stack"><div><h1>Impostazioni</h1><p class="lede">Valgono per tutti gli agenti. Le trovi anche nel foglio “Impostazioni”.</p></div>
+  <div class="panel"><h2>Chiave AI (Google Gemini)</h2><p style="margin-top:6px">${D.haChiave?'<span class="chip ok">Chiave salvata</span>':'<span class="chip crit">Manca</span>'} Creala gratis su aistudio.google.com → “Get API key”, con questo stesso account Google, e incollala qui. Resta salvata nel progetto, non nel foglio.</p>
+   <div class="row" style="margin-top:10px"><input id="aiKey" type="password" placeholder="Incolla la chiave" style="flex:1;min-width:200px"><button class="primary" id="saveKey">Salva chiave</button><button id="testAI">Prova</button></div></div>
+  <div class="panel"><h2>Come lavorano gli agenti</h2><form id="fCfg" class="form" style="margin-top:10px">
+   <label>Modalità<select id="cfg_MODALITA"><option value="APPROVA" ${c.MODALITA!=='AUTO'?'selected':''}>Con approvazione (consigliata le prime 2 settimane)</option><option value="AUTO" ${c.MODALITA==='AUTO'?'selected':''}>Automatica: inviano da sole alle 9</option></select></label>
+   <label>Agenti attivi<select id="cfg_ATTIVO"><option value="SI" ${c.ATTIVO==='SI'?'selected':''}>Sì</option><option value="NO" ${c.ATTIVO!=='SI'?'selected':''}>In pausa</option></select></label>
+   ${f('MAX_INVII_GIORNO','Massimo email al giorno','type="number" min="1" max="40"')}${f('LEAD_AL_GIORNO','Nuove aziende al giorno','type="number" min="1" max="20"')}
+   <label class="full">Province (separate da virgola)<input id="cfg_PROVINCE" value="${esc(c.PROVINCE)}"></label>
+   <label class="full">Settori<input id="cfg_SETTORI" value="${esc(c.SETTORI)}"></label>
+   <label class="full">Tipi di partner<input id="cfg_TIPI_PARTNER" value="${esc(c.TIPI_PARTNER)}"></label>
+   ${f('NOME_MITTENTE','Nome mittente')}${f('EMAIL_NOTIFICHE','Email per avvisi e report','type="email"')}${f('AI_MODELLO','Modello AI')}
+   <label class="full">Firma<textarea id="cfg_FIRMA">${esc(c.FIRMA)}</textarea></label>
+   <div class="full"><button class="primary" type="submit">Salva impostazioni</button></div></form></div></div>`}
+function vStrategia(){return `<div class="stack"><div><h1>Strategia</h1><p class="lede">Vendere dove c’è fiducia o un obbligo nuovo, e trasformare ogni vendita in un rinnovo.</p></div>
+  <div class="grid g2">
+  <div class="panel play"><span class="num">LEVA 1 · NORMATIVA</span><h3>Nuovo obbligo per i datori di lavoro</h3><p>Il nuovo Accordo Stato-Regioni sulla formazione (G.U. 24 maggio 2025) introduce un obbligo formativo per i datori di lavoro e rafforza quello dei preposti. Il corso del titolare apre la porta a DVR e antincendio. Verifica durate e termini sul testo ufficiale.</p></div>
+  <div class="panel play"><span class="num">LEVA 2 · PARTNER</span><h3>Chi ha già i tuoi clienti</h3><p>Consulenti del lavoro (sanno chi assume), commercialisti (nuove aperture), manutentori di estintori (entrano ogni semestre), agenzie per il lavoro. Obiettivo: 5 attivi in 4 settimane.</p></div>
+  <div class="panel play"><span class="num">LEVA 3 · PRODOTTO</span><h3>Corsi a calendario</h3><p>Posti in vendita per micro-imprese che da sole non riempiono un corso. Decisione rapida, prezzo chiaro, rinnovo già previsto.</p></div>
+  <div class="panel play"><span class="num">LEVA 4 · ESCA UTILE</span><h3>Scadenziario gratuito</h3><p>“Mi mandi gli attestati, le restituisco il calendario delle scadenze.” Valore subito per loro, e sai quando ti chiameranno.</p></div>
+  <div class="panel play"><span class="num">LEVA 5 · FREDDO MIGLIORATO</span><h3>Solo con un segnale</h3><p>Il Cercatore scrive solo a chi assume, apre una sede o un cantiere, e il messaggio cita quel motivo.</p></div>
+  <div class="panel play"><span class="num">LEVA 6 · FIDUCIA</span><h3>Prove vere</h3><p>Scheda Google Business, una recensione dopo ogni lavoro, testimonianze reali nel sito al posto di quelle generiche.</p></div>
+  </div>
+  <div class="panel"><h2>Regole che non si toccano</h2><ul style="margin-top:8px"><li>Solo indirizzi aziendali pubblici, mai liste comprate o email personali.</li><li>Ogni email a freddo ha la riga per non essere ricontattati; chi risponde NO viene escluso in automatico.</li><li>Massimo 15-20 invii al giorno dalla stessa casella.</li><li>Niente numeri o testimonianze inventati.</li></ul></div></div>`}
+
+/* Schede */
+function closeDrawer(){document.querySelectorAll('.drawer,.drawer-bg').forEach(e=>e.remove());S.open=null}
+function drawer(html){closeDrawer();const bg=document.createElement('div');bg.className='drawer-bg';bg.onclick=closeDrawer;const d=document.createElement('aside');d.className='drawer';d.setAttribute('role','dialog');d.innerHTML=html;document.body.append(bg,d);d.querySelector('[data-close]').onclick=closeDrawer;return d}
+const inp=(id,l,v,t,cls)=>`<label class="${cls||''}">${l}<input id="${id}" ${t||''} value="${esc(v)}"></label>`;
+const sel=(id,l,opts,v)=>`<label>${l}<select id="${id}">${opts.map(o=>{const [k,t]=Array.isArray(o)?o:[o,o];return `<option value="${esc(k)}" ${v===k?'selected':''}>${esc(t)}</option>`}).join('')}</select></label>`;
+function openLead(id){
+  const l=id==='new'?{stato:'nuovo',canale:'segnale'}:D.lead.find(x=>x.id===id);if(!l)return;
+  const d=drawer(`<div class="head"><div><div class="eyebrow">${l.id?esc(stageLabel(l.stato)):'Nuova scheda'}</div><h2>${l.id?esc(l.azienda):'Aggiungi azienda'}</h2></div><button class="ghost" data-close>Chiudi</button></div>
+  ${l.id?`<div class="panel" style="margin-bottom:14px"><h3>Scrivi con l’agente</h3><div class="row" style="margin-top:10px;gap:8px"><button data-w="telefono">Script telefonata</button><button data-w="linkedin">Messaggio LinkedIn</button><button data-w="preventivo">Preventivo</button></div><div class="out" id="wOut" hidden style="margin-top:10px"></div><div class="row" id="wAct" hidden style="margin-top:8px"><button id="wCopy">Copia</button></div>${l.fonte?`<p class="src" style="margin-top:10px">Fonte del segnale: <a href="${esc(l.fonte)}" target="_blank" rel="noopener">${esc(l.fonte).slice(0,70)}</a></p>`:''}</div>`:''}
+  <div class="panel"><form id="fLead" class="form">
+   ${inp('l_azienda','Azienda',l.azienda,'required','full')}${inp('l_settore','Settore',l.settore)}${inp('l_provincia','Provincia',l.provincia)}${inp('l_contatto','Referente / ruolo',l.contatto)}${inp('l_email','Email aziendale',l.email,'type="email"')}${inp('l_telefono','Telefono',l.telefono)}${inp('l_sito','Sito',l.sito)}
+   ${sel('l_canale','Canale',Object.entries(CANALI),l.canale)}${sel('l_servizio','Servizio probabile',SERVIZI,l.servizio)}${sel('l_stato','Fase',STAGES.map(s=>[s.k,s.l]),l.stato||'nuovo')}${inp('l_valore','Valore (€)',l.valore,'type="number" min="0"')}
+   ${inp('l_segnale','Segnale di bisogno',l.segnale,'','full')}${inp('l_prossimaAzione','Prossima azione',l.prossimaAzione)}${inp('l_dataProssima','Data prossima azione',l.dataProssima,'type="date"')}
+   <label class="full">Note e appunti call<textarea id="l_note">${esc(l.note)}</textarea></label>
+   <div class="full row"><button class="primary" type="submit">Salva</button>${l.id?'<button type="button" class="ghost" id="delLead">Elimina</button>':''}</div></form></div>`);
+  d.querySelector('#fLead').onsubmit=async e=>{e.preventDefault();const o={id:l.id||''};['azienda','settore','provincia','contatto','email','telefono','sito','canale','servizio','stato','valore','segnale','prossimaAzione','dataProssima','note'].forEach(k=>o[k]=$('#l_'+k).value.trim());if(!o.id)delete o.id;await run('api_salva',['lead',o],e.submitter,'Salvato'+(o.email&&o.stato==='nuovo'&&!l.id?': prima email in preparazione':''));closeDrawer()};
+  const del=d.querySelector('#delLead');if(del){let a=false;del.onclick=async()=>{if(!a){a=true;del.textContent='Conferma eliminazione';return}await run('api_elimina',['lead',l.id],del,'Eliminata');closeDrawer()}}
+  let last='';d.querySelectorAll('[data-w]').forEach(b=>b.onclick=async()=>{const o=$('#wOut');o.hidden=false;o.textContent='Sto scrivendo…';b.disabled=true;try{last=await call('api_scrivi',b.dataset.w,l.id);o.textContent=last;$('#wAct').hidden=false}catch(e){o.textContent=e.message}b.disabled=false});
+  const wc=d.querySelector('#wCopy');if(wc)wc.onclick=()=>copy(last);
+}
+function openPartner(id){
+  const p=id==='new'?{stato:'da contattare'}:D.partner.find(x=>x.id===id);if(!p)return;
+  const d=drawer(`<div class="head"><div><div class="eyebrow">Partner</div><h2>${p.id?esc(p.nome):'Aggiungi partner'}</h2></div><button class="ghost" data-close>Chiudi</button></div>
+  <div class="panel"><form id="fP" class="form">${inp('p_nome','Nome',p.nome,'required','full')}${sel('p_tipo','Tipo',PARTNER_TIPI,p.tipo)}${inp('p_citta','Città',p.citta)}${inp('p_referente','Referente',p.referente)}${inp('p_email','Email',p.email,'type="email"')}${inp('p_telefono','Telefono',p.telefono)}${inp('p_sito','Sito',p.sito)}
+  ${sel('p_stato','Stato',['da contattare','contattato','ha risposto','incontro fissato','attivo','chiuso'],p.stato)}${inp('p_segnalate','Aziende segnalate',p.segnalate||0,'type="number" min="0"')}${inp('p_prossimaAzione','Prossima azione',p.prossimaAzione)}${inp('p_dataProssima','Data',p.dataProssima,'type="date"')}
+  <label class="full">Note<textarea id="p_note">${esc(p.note)}</textarea></label><div class="full row"><button class="primary" type="submit">Salva</button>${p.id?'<button type="button" class="ghost" id="delP">Elimina</button>':''}</div></form>
+  ${p.fonte?`<p class="src" style="margin-top:10px">Fonte: <a href="${esc(p.fonte)}" target="_blank" rel="noopener">${esc(p.fonte).slice(0,70)}</a></p>`:''}</div>`);
+  d.querySelector('#fP').onsubmit=async e=>{e.preventDefault();const o={id:p.id||''};['nome','tipo','citta','referente','email','telefono','sito','stato','segnalate','prossimaAzione','dataProssima','note'].forEach(k=>o[k]=$('#p_'+k).value.trim());if(!o.id)delete o.id;await run('api_salva',['partner',o],e.submitter,'Salvato');closeDrawer()};
+  const del=d.querySelector('#delP');if(del){let a=false;del.onclick=async()=>{if(!a){a=true;del.textContent='Conferma eliminazione';return}await run('api_elimina',['partner',p.id],del,'Eliminato');closeDrawer()}}
+}
+
+function bind(v){
+  document.querySelectorAll('[data-apri]').forEach(b=>b.onclick=()=>{const t=b.dataset.apri;if(t==='lead')openLead(b.dataset.id);else if(t==='partner')openPartner(b.dataset.id);else location.hash='scadenze'});
+  if(v==='oggi'){
+    const at=$('#approvaTutte');if(at){let a=false;at.onclick=()=>{if(!a){a=true;at.textContent='Conferma: invia tutte';return}run('api_approvaTutte',[],at)}}
+    document.querySelectorAll('[data-approva]').forEach(b=>b.onclick=()=>{const id=b.dataset.approva;run('api_approva',[id,$('#ogg_'+id).value,$('#corpo_'+id).value],b,'Email inviata')});
+    document.querySelectorAll('[data-scarta]').forEach(b=>b.onclick=()=>run('api_scarta',[b.dataset.scarta],b,'Scartata'));
+  }
+  if(v==='pipeline'){$('#addLead').onclick=()=>openLead('new');$('#fCanale').onchange=e=>{S.filtro=e.target.value;render()};document.querySelectorAll('[data-lead]').forEach(b=>b.onclick=()=>openLead(b.dataset.lead))}
+  if(v==='partner'){$('#addPartner').onclick=()=>openPartner('new');document.querySelectorAll('[data-partner]').forEach(b=>b.onclick=()=>openPartner(b.dataset.partner))}
+  if(v==='scadenze'){
+    $('#fScad').onsubmit=e=>{e.preventDefault();run('api_salva',['scadenze',{cliente:$('#sc_cliente').value.trim(),email:$('#sc_email').value.trim(),adempimento:$('#sc_adem').value,dataScadenza:$('#sc_data').value,persone:$('#sc_persone').value,note:$('#sc_note').value.trim(),stato:'aperta'}],e.submitter,'Scadenza salvata')};
+    document.querySelectorAll('[data-rinn]').forEach(b=>b.onclick=()=>run('api_salva',['scadenze',{id:b.dataset.rinn,stato:'rinnovato'}],b,'Segnato come rinnovato'));
+    document.querySelectorAll('[data-delsc]').forEach(b=>{let a=false;b.onclick=()=>{if(!a){a=true;b.textContent='Conferma';return}run('api_elimina',['scadenze',b.dataset.delsc],b,'Eliminata')}});
+  }
+  if(v==='agenti')document.querySelectorAll('[data-esegui]').forEach(b=>b.onclick=()=>run('api_esegui',[b.dataset.esegui],b,'Agente eseguito: guarda il registro'));
+  if(v==='impostazioni'){
+    $('#saveKey').onclick=e=>{const k=$('#aiKey').value.trim();if(!k){toast('Incolla prima la chiave');return}run('api_impostazioni',[{},k],e.target,'Chiave salvata')};
+    $('#testAI').onclick=async e=>{e.target.disabled=true;try{toast(await call('api_provaAI'))}catch(x){toast(x.message)}e.target.disabled=false};
+    $('#fCfg').onsubmit=e=>{e.preventDefault();const o={};['MODALITA','ATTIVO','MAX_INVII_GIORNO','LEAD_AL_GIORNO','PROVINCE','SETTORI','TIPI_PARTNER','NOME_MITTENTE','EMAIL_NOTIFICHE','AI_MODELLO','FIRMA'].forEach(k=>o[k]=$('#cfg_'+k).value.trim());run('api_impostazioni',[o,''],e.submitter,'Impostazioni salvate')};
+  }
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
+window.addEventListener('hashchange',()=>{closeDrawer();render()});
+call('api_carica').then(r=>{D=r;render()}).catch(e=>{$('#app').innerHTML='<div class="note">Impossibile leggere l’archivio: '+esc(e.message||e)+'. Hai eseguito la funzione installa?</div>'});
+</script>
+</body>
+</html>
