@@ -12,11 +12,13 @@ Fai tutto con l'account **consulting.santarelli@gmail.com**: le email partiranno
    Esegui come: **Me** · Chi ha accesso: **Solo io** → **Esegui il deployment**. Copia il link dell'app web.
 7. Apri il link. Su PC: aggiungilo ai preferiti. Su telefono: menu del browser → **Aggiungi a schermata Home**.
 8. Crea la chiave AI gratuita su **aistudio.google.com** (stesso account) → *Get API key* → incollala nell'app in **Impostazioni** → **Salva chiave** → **Prova**.
-9. In **Agenti** premi **Esegui ora** sul *Cercatore*: le prime aziende arrivano in Pipeline e le prime email in *Oggi*.
+9. In **Impostazioni → Listino prezzi** inserisci i tuoi prezzi (IVA esclusa). Senza prezzi il Venditore non fa preventivi.
+10. In **Agenti** premi **Esegui ora** sul *Cercatore*: le prime aziende arrivano in Pipeline e le prime email in *Oggi*.
 
 ## Cosa succede da solo ogni giorno
 | Ora | Agente |
 |---|---|
+| a ogni risposta | Il Venditore risponde, fa le domande, propone call nei tuoi orari, prepara preventivo e contratto PDF (questi partono solo con il tuo OK) |
 | 06:00 | Legge risposte, cerca aziende (e partner il lunedì), scrive primi messaggi e follow-up, prepara rinnovi |
 | 09:00 | In modalità Automatica invia le email (massimo 15 al giorno) |
 | ogni 2 ore | Legge le risposte in Gmail, ti avvisa, esclude chi scrive NO |

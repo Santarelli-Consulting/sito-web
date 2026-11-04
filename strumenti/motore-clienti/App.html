@@ -162,6 +162,7 @@ const AGENTI=[
  {k:'redattore',n:'Redattore',q:'Ogni giorno alle 6',c:'Scrive il primo messaggio per ogni nuova azienda con email, citando il suo segnale.'},
  {k:'rimandatore',n:'Rimandatore',q:'Ogni giorno alle 6',c:'Follow-up dopo 3 giorni, ultimo messaggio dopo altri 4, poi chiude la scheda.'},
  {k:'risposte',n:'Lettore risposte',q:'Ogni 2 ore',c:'Legge le risposte in Gmail: sposta la scheda in “Ha risposto” e ti avvisa; chi scrive NO viene escluso.'},
+ {k:'risposte',n:'Venditore',q:'A ogni risposta',c:'Porta avanti la trattativa per email: fa le domande giuste, propone call nei tuoi orari, prepara preventivo dal listino e contratto d’incarico in PDF. Preventivi e contratti partono solo con il tuo OK.'},
  {k:'scadenziere',n:'Scadenziere',q:'Ogni giorno alle 6',c:'90 giorni prima di ogni scadenza dei clienti prepara la proposta di rinnovo.'},
  {k:'analista',n:'Analista',q:'Ogni venerdì alle 17',c:'Ti manda via email il report della settimana con 3 correzioni.'}
 ];
@@ -192,7 +193,8 @@ function render(){
 
 function vOggi(){
   const st=D.stat,c=D.config;const hit=st.contrattiSettimana>=1;const max=Math.max(1,...STAGES.map(s=>st.fasi[s.k]||0));
-  const avviso=!D.haChiave?`<div class="note">Manca la chiave AI: gli agenti non possono scrivere né cercare. Vai in <a href="#impostazioni">Impostazioni</a> (2 minuti).</div>`:'';
+  const senzaPrezzi=(D.listino||[]).length&&!(D.listino||[]).some(r=>r.prezzo);
+  const avviso=(senzaPrezzi?`<div class="note">Il listino non ha prezzi: il Venditore non può fare preventivi. Inseriscili in <a href="#impostazioni">Impostazioni</a>.</div>`:'')+(!D.haChiave?`<div class="note">Manca la chiave AI: gli agenti non possono scrivere né cercare. Vai in <a href="#impostazioni">Impostazioni</a> (2 minuti).</div>`:'');
   return `<div class="stack">${avviso}
   <div><div class="eyebrow">Modalità ${c.MODALITA==='AUTO'?'automatica':'con approvazione'} · ${D.inviatiOggi}/${esc(c.MAX_INVII_GIORNO)} invii oggi</div><h1>Obiettivo: 1 contratto a settimana</h1>
   <p class="lede">Gli agenti lavorano da soli ogni mattina. Tu approvi le email qui sotto e rispondi a chi risponde.</p></div>
@@ -205,10 +207,11 @@ function vOggi(){
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>Email pronte da approvare</h2>
    <div class="row">${D.bozze.length?`<button class="primary" id="approvaTutte">Approva e invia tutte (${D.bozze.length})</button>`:''}</div></div>
    <div style="margin-top:6px">${D.bozze.length?D.bozze.map(b=>`<div class="bz" data-bz="${b.id}">
-     <div class="row" style="justify-content:space-between"><div><span class="chip ${b.tipo==='primo'?'brand':b.tipo==='partner'?'ok':''}">${esc(b.tipo)}</span> <b style="color:var(--ink)">${esc(b.a)}</b></div><span class="src">${fmtD(b.creata)}</span></div>
+     <div class="row" style="justify-content:space-between"><div><span class="chip ${b.tipo==='vendita'?'crit':b.tipo==='primo'?'brand':b.tipo==='partner'?'ok':''}">${esc(b.tipo==='vendita'?'trattativa · '+(b.azione||''):b.tipo)}</span> <b style="color:var(--ink)">${esc(b.a)}</b></div><span class="src">${fmtD(b.creata)}</span></div>
      <input id="ogg_${b.id}" value="${esc(b.oggetto)}" aria-label="Oggetto">
      <textarea id="corpo_${b.id}" aria-label="Testo">${esc(b.corpo)}</textarea>
-     ${b.errore?`<div class="note">${esc(b.errore)}</div>`:''}
+     ${b.errore?`<div class="note">Nota per te: ${esc(b.errore)}</div>`:''}
+     ${b.allegato?`<div class="row"><a class="btn" href="https://docs.google.com/document/d/${esc(b.allegato)}/edit" target="_blank" rel="noopener">Apri e controlla il contratto allegato</a><span class="src">Completa i dati del cliente se li conosci: parte come PDF.</span></div>`:''}
      <div class="row"><button class="primary" data-approva="${b.id}">Approva e invia</button><button class="ghost" data-scarta="${b.id}">Scarta</button><span class="src">Firma e riga per non essere ricontattati vengono aggiunte in automatico.</span></div>
    </div>`).join(''):`<div class="empty"><b>Nessuna email in attesa.</b><br>Gli agenti preparano le prossime domattina alle 6. Puoi farli partire subito da <a href="#agenti">Agenti</a>.</div>`}</div>
   </div>
@@ -237,11 +240,19 @@ function vImpostazioni(){const c=D.config;const f=(k,l,t)=>`<label>${l}<input id
   return `<div class="stack"><div><h1>Impostazioni</h1><p class="lede">Valgono per tutti gli agenti. Le trovi anche nel foglio “Impostazioni”.</p></div>
   <div class="panel"><h2>Chiave AI (Google Gemini)</h2><p style="margin-top:6px">${D.haChiave?'<span class="chip ok">Chiave salvata</span>':'<span class="chip crit">Manca</span>'} Creala gratis su aistudio.google.com → “Get API key”, con questo stesso account Google, e incollala qui. Resta salvata nel progetto, non nel foglio.</p>
    <div class="row" style="margin-top:10px"><input id="aiKey" type="password" placeholder="Incolla la chiave" style="flex:1;min-width:200px"><button class="primary" id="saveKey">Salva chiave</button><button id="testAI">Prova</button></div></div>
+  <div class="panel"><h2>Listino prezzi</h2><p style="margin-top:6px">Il Venditore usa solo questi prezzi (IVA esclusa). Senza prezzo non fa il preventivo di quel servizio e ti chiede di inserirlo.</p>
+   <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Servizio</th><th>Prezzo €</th><th>Unità</th><th>Note</th></tr></thead><tbody>
+   ${(D.listino||[]).map((r,i)=>`<tr><td><input id="li_s${i}" value="${esc(r.servizio)}"></td><td><input id="li_p${i}" type="number" min="0" value="${esc(r.prezzo)}" style="width:110px"></td><td><input id="li_u${i}" value="${esc(r.unita)}" style="width:120px"></td><td><input id="li_n${i}" value="${esc(r.note)}"></td></tr>`).join('')}
+   <tr><td><input id="li_snew" placeholder="Nuovo servizio"></td><td><input id="li_pnew" type="number" min="0" style="width:110px"></td><td><input id="li_unew" style="width:120px"></td><td><input id="li_nnew"></td></tr>
+   </tbody></table></div><div class="row" style="margin-top:10px"><button class="primary" id="saveListino">Salva listino</button></div></div>
   <div class="panel"><h2>Come lavorano gli agenti</h2><form id="fCfg" class="form" style="margin-top:10px">
    <label>Modalità<select id="cfg_MODALITA"><option value="APPROVA" ${c.MODALITA!=='AUTO'?'selected':''}>Con approvazione (consigliata le prime 2 settimane)</option><option value="AUTO" ${c.MODALITA==='AUTO'?'selected':''}>Automatica: inviano da sole alle 9</option></select></label>
    <label>Agenti attivi<select id="cfg_ATTIVO"><option value="SI" ${c.ATTIVO==='SI'?'selected':''}>Sì</option><option value="NO" ${c.ATTIVO!=='SI'?'selected':''}>In pausa</option></select></label>
    ${f('MAX_INVII_GIORNO','Massimo email al giorno','type="number" min="1" max="40"')}${f('LEAD_AL_GIORNO','Nuove aziende al giorno','type="number" min="1" max="20"')}
-   <label class="full">Province (separate da virgola)<input id="cfg_PROVINCE" value="${esc(c.PROVINCE)}"></label>
+   <label class="full">Comuni in cui cercare (separati da virgola)<input id="cfg_ZONE" value="${esc(c.ZONE)}"></label>
+   <label class="full">Orari in cui puoi fare call<input id="cfg_ORARI_CALL" value="${esc(c.ORARI_CALL)}"></label>
+   <label class="full">Intestazione nel contratto (tu come consulente)<input id="cfg_CONTRAENTE" value="${esc(c.CONTRAENTE)}"></label>
+   <label class="full">Condizioni di pagamento nel contratto<input id="cfg_PAGAMENTO" value="${esc(c.PAGAMENTO)}"></label>
    <label class="full">Settori<input id="cfg_SETTORI" value="${esc(c.SETTORI)}"></label>
    <label class="full">Tipi di partner<input id="cfg_TIPI_PARTNER" value="${esc(c.TIPI_PARTNER)}"></label>
    ${f('NOME_MITTENTE','Nome mittente')}${f('EMAIL_NOTIFICHE','Email per avvisi e report','type="email"')}${f('AI_MODELLO','Modello AI')}
@@ -307,7 +318,8 @@ function bind(v){
   if(v==='impostazioni'){
     $('#saveKey').onclick=e=>{const k=$('#aiKey').value.trim();if(!k){toast('Incolla prima la chiave');return}run('api_impostazioni',[{},k],e.target,'Chiave salvata')};
     $('#testAI').onclick=async e=>{e.target.disabled=true;try{toast(await call('api_provaAI'))}catch(x){toast(x.message)}e.target.disabled=false};
-    $('#fCfg').onsubmit=e=>{e.preventDefault();const o={};['MODALITA','ATTIVO','MAX_INVII_GIORNO','LEAD_AL_GIORNO','PROVINCE','SETTORI','TIPI_PARTNER','NOME_MITTENTE','EMAIL_NOTIFICHE','AI_MODELLO','FIRMA'].forEach(k=>o[k]=$('#cfg_'+k).value.trim());run('api_impostazioni',[o,''],e.submitter,'Impostazioni salvate')};
+    $('#saveListino').onclick=e=>{const n=(D.listino||[]).length;const righe=[];for(let i=0;i<n;i++)righe.push({servizio:$('#li_s'+i).value.trim(),prezzo:$('#li_p'+i).value.trim(),unita:$('#li_u'+i).value.trim(),note:$('#li_n'+i).value.trim()});if($('#li_snew').value.trim())righe.push({servizio:$('#li_snew').value.trim(),prezzo:$('#li_pnew').value.trim(),unita:$('#li_unew').value.trim(),note:$('#li_nnew').value.trim()});run('api_listino',[righe],e.target,'Listino salvato')};
+    $('#fCfg').onsubmit=e=>{e.preventDefault();const o={};['MODALITA','ATTIVO','MAX_INVII_GIORNO','LEAD_AL_GIORNO','ZONE','ORARI_CALL','CONTRAENTE','PAGAMENTO','SETTORI','TIPI_PARTNER','NOME_MITTENTE','EMAIL_NOTIFICHE','AI_MODELLO','FIRMA'].forEach(k=>o[k]=$('#cfg_'+k).value.trim());run('api_impostazioni',[o,''],e.submitter,'Impostazioni salvate')};
   }
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});

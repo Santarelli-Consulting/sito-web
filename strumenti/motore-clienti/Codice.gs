@@ -11,25 +11,29 @@
 
 const VERSIONE = '1.0';
 const TAB = {
-  lead: ['id','azienda','settore','provincia','contatto','email','telefono','sito','canale','servizio','stato','valore','segnale','fonte','prossimaAzione','dataProssima','note','dataPrimoContatto','dataUltimoContatto','dataContratto','threadId','followups','createdAt','updatedAt'],
+  lead: ['id','azienda','settore','provincia','contatto','email','telefono','sito','canale','servizio','stato','valore','segnale','fonte','prossimaAzione','dataProssima','note','dataPrimoContatto','dataUltimoContatto','dataContratto','threadId','followups','msgVisti','ultimaRisposta','createdAt','updatedAt'],
   partner: ['id','nome','tipo','citta','referente','email','telefono','sito','stato','segnalate','prossimaAzione','dataProssima','note','fonte','threadId','createdAt','updatedAt'],
   scadenze: ['id','cliente','email','adempimento','dataScadenza','persone','note','stato','propostaInviata','createdAt','updatedAt'],
-  bozze: ['id','rifTipo','rifId','tipo','a','oggetto','corpo','stato','creata','inviata','errore'],
+  bozze: ['id','rifTipo','rifId','tipo','a','oggetto','corpo','stato','creata','inviata','errore','azione','allegato','richiedeApprovazione'],
+  listino: ['servizio','prezzo','unita','note'],
   log: ['data','agente','esito']
 };
-const NOMI_TAB = {lead:'Lead', partner:'Partner', scadenze:'Scadenze', bozze:'Bozze', log:'Registro agenti', config:'Impostazioni'};
+const NOMI_TAB = {lead:'Lead', partner:'Partner', scadenze:'Scadenze', bozze:'Bozze', listino:'Listino', log:'Registro agenti', config:'Impostazioni'};
 
 const CONFIG_DEFAULT = {
   MODALITA: 'APPROVA',            // APPROVA = gli agenti preparano, tu approvi con un clic · AUTO = inviano da soli entro il limite
   MAX_INVII_GIORNO: '15',
   LEAD_AL_GIORNO: '10',
-  PROVINCE: 'Bergamo, Brescia, Milano, Monza e Brianza, Varese, Como, Lecco',
+  ZONE: 'Cassina de\' Pecchi, Gorgonzola, Melzo, Cernusco sul Naviglio, Pioltello, Segrate, Vimodrone, Bussero, Carugate, Pessano con Bornago, Vignate, Liscate, Pozzuolo Martesana, Inzago, Cassano d\'Adda, Truccazzano, Brugherio, Agrate Brianza, Vimercate',
+  ORARI_CALL: 'dal lunedì al venerdì tra le 13:00 e le 14:00 oppure dopo le 18:30',
   SETTORI: 'logistica e magazzini, metalmeccanica, edilizia, ristorazione, commercio',
   TIPI_PARTNER: 'consulente del lavoro, commercialista, manutenzione estintori, agenzia per il lavoro',
   NOME_MITTENTE: 'Sara Santarelli - Santarelli Consulting',
   FIRMA: 'Sara Santarelli\nSantarelli Consulting\n388 126 0689 · consultingsantarelli.it',
   EMAIL_NOTIFICHE: '',
   AI_MODELLO: 'gemini-2.5-flash',
+  CONTRAENTE: 'Santarelli Consulting di Sara Santarelli, P.IVA 01257820579',
+  PAGAMENTO: 'Pagamento: 50% alla firma, saldo alla consegna, con bonifico bancario a 30 giorni data fattura.',
   ATTIVO: 'SI'
 };
 
@@ -56,6 +60,11 @@ function installa() {
     const me = Session.getActiveUser().getEmail();
     const rows = Object.keys(CONFIG_DEFAULT).map(k => [k, k === 'EMAIL_NOTIFICHE' ? me : CONFIG_DEFAULT[k]]);
     cfg.getRange(2, 1, rows.length, 2).setNumberFormat('@').setValues(rows);
+  }
+  const li = ss.getSheetByName(NOMI_TAB.listino);
+  if (li.getLastRow() < 2) {
+    const righe = [['Corso datore di lavoro','','a persona',''],['Corso lavoratori (generale + specifica)','','a persona',''],['Corso preposti','','a persona',''],['Aggiornamento lavoratori','','a persona',''],['Antincendio livello 2 (corso addetti)','','a persona',''],['Primo soccorso','','a persona',''],['Valutazione rischio incendio + piano di emergenza','','a sede',''],['DVR','','a sede','dipende da addetti e attività'],['RSPP esterno','','annuo',''],['Abbonamento Sicurezza (RSPP + scadenziario + aggiornamenti)','','mensile','']];
+    li.getRange(2, 1, righe.length, 4).setValues(righe);
   }
   const s1 = ss.getSheets()[0];
   if (s1.getName().match(/^(Foglio|Sheet)\s?1$/) && s1.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(s1);
@@ -171,11 +180,11 @@ function agenteCercatore() {
   const inCoda = leggi('lead').filter(l => l.stato === 'nuovo').length;
   const target = parseInt(c.LEAD_AL_GIORNO, 10) || 10;
   if (inCoda >= target * 2) { scriviLog('Cercatore', 'Coda piena (' + inCoda + ' da contattare): nessuna nuova ricerca'); return; }
-  const prov = c.PROVINCE.split(',').map(s => s.trim()).filter(Boolean);
+  const prov = c.ZONE.split(',').map(s => s.trim()).filter(Boolean);
   const sett = c.SETTORI.split(',').map(s => s.trim()).filter(Boolean);
   const g = Math.floor(Date.now() / 864e5);
-  const p = prov[g % prov.length], s = sett[g % sett.length];
-  const prompt = 'Usa la ricerca Google. Trova fino a ' + target + ' aziende REALI con sede in provincia di ' + p + ', settore ' + s + ', da 5 a 150 dipendenti, che mostrano un SEGNALE di bisogno di sicurezza sul lavoro negli ultimi 3 mesi: annunci di lavoro attivi (nuovi assunti da formare), apertura di nuova sede o capannone, ampliamento, cantiere avviato. ' +
+  const p = prov[g % prov.length], s = sett[Math.floor(g / prov.length) % sett.length];
+  const prompt = 'Usa la ricerca Google. Trova fino a ' + target + ' aziende REALI con sede o stabilimento a ' + p + ' o nei comuni confinanti (zona est Milano / Martesana, massimo 15 km da Cassina de\' Pecchi), settore ' + s + ', da 5 a 150 dipendenti, che mostrano un SEGNALE di bisogno di sicurezza sul lavoro negli ultimi 3 mesi: annunci di lavoro attivi (nuovi assunti da formare), apertura di nuova sede o capannone, ampliamento, cantiere avviato. ' +
     'Per ognuna riporta solo dati pubblici trovati su fonti verificabili: email aziendale generica (info@, amministrazione@, ecc.) SOLO se compare sul sito ufficiale, altrimenti stringa vuota; mai email personali. ' +
     'Rispondi SOLO con un blocco ```json contenente un array di oggetti con chiavi: azienda, settore, provincia, sito, email, telefono, segnale (frase breve e concreta), fonte (URL dove hai visto il segnale), servizio (uno tra: Corso lavoratori, Corso preposti, Corso datore di lavoro, Antincendio (corso), Antincendio (VRI + piano emergenza), DVR, RSPP esterno). Non inventare aziende: se non trovi abbastanza risultati restituisci meno elementi.';
   const trovati = estraiJSON(ai(prompt, true));
@@ -195,11 +204,11 @@ function agenteCercatore() {
 function agenteCercatorePartner(forza) {
   if (forza !== true && new Date().getDay() !== 1) return;
   const c = config();
-  const prov = c.PROVINCE.split(',').map(s => s.trim()).filter(Boolean);
+  const prov = c.ZONE.split(',').map(s => s.trim()).filter(Boolean);
   const tipi = c.TIPI_PARTNER.split(',').map(s => s.trim()).filter(Boolean);
   const w = Math.floor(Date.now() / (7 * 864e5));
   const p = prov[w % prov.length], tipo = tipi[w % tipi.length];
-  const prompt = 'Usa la ricerca Google. Trova fino a 8 ' + tipo + ' REALI (studi o aziende) in provincia di ' + p + ' che lavorano con piccole e medie imprese. Riporta solo dati pubblici dal sito ufficiale; email solo se generica e pubblicata sul sito, altrimenti stringa vuota. ' +
+  const prompt = 'Usa la ricerca Google. Trova fino a 8 ' + tipo + ' REALI (studi o aziende) a ' + p + ' o nei comuni vicini (est Milano / Martesana) che lavorano con piccole e medie imprese. Riporta solo dati pubblici dal sito ufficiale; email solo se generica e pubblicata sul sito, altrimenti stringa vuota. ' +
     'Rispondi SOLO con un blocco ```json con un array di oggetti: nome, tipo, citta, sito, email, telefono, fonte (URL). Non inventare.';
   const trovati = estraiJSON(ai(prompt, true));
   const esistenti = leggi('partner').map(x => norm(x.nome));
@@ -276,7 +285,7 @@ function agenteScadenziere() {
 function agenteInvii() {
   const c = config();
   if (c.ATTIVO !== 'SI' || c.MODALITA !== 'AUTO') return;
-  const ids = leggi('bozze').filter(b => b.stato === 'da approvare').map(b => b.id);
+  const ids = leggi('bozze').filter(b => b.stato === 'da approvare' && b.richiedeApprovazione !== 'SI').map(b => b.id);
   let n = 0;
   ids.forEach(id => { if (inviatiOggi() < parseInt(c.MAX_INVII_GIORNO, 10)) { if (inviaBozza(id)) n++; } });
   scriviLog('Invii automatici', n + ' email inviate');
@@ -289,14 +298,15 @@ function inviaBozza(id, testoModificato, oggettoModificato) {
   if (!b || b.stato !== 'da approvare') return false;
   if (inviatiOggi() >= parseInt(c.MAX_INVII_GIORNO, 10)) throw new Error('Limite di ' + c.MAX_INVII_GIORNO + ' invii al giorno raggiunto: le altre partono domani.');
   const corpo0 = testoModificato || b.corpo, oggetto = oggettoModificato || b.oggetto;
-  const freddo = b.rifTipo === 'lead';
+  const freddo = b.rifTipo === 'lead' && b.tipo !== 'vendita';
   const corpo = corpo0 + '\n\n' + c.FIRMA + (freddo ? '\n\n' + OPT_OUT : '');
   const opz = { name: c.NOME_MITTENTE };
   try {
     let threadId = '';
     let rif = null;
     if (b.rifTipo === 'lead') rif = leggi('lead').filter(l => l.id === b.rifId)[0];
-    if (rif && rif.threadId && b.tipo.indexOf('followup') === 0) {
+    if (b.allegato) { try { opz.attachments = [DriveApp.getFileById(b.allegato).getAs('application/pdf')]; } catch (e) { throw new Error('Contratto allegato non trovato: ' + e.message); } }
+    if (rif && rif.threadId && (b.tipo.indexOf('followup') === 0 || b.tipo === 'vendita')) {
       const th = GmailApp.getThreadById(rif.threadId);
       const msgs = th.getMessages();
       msgs[msgs.length - 1].createDraftReplyAll(corpo, opz).send();
@@ -319,6 +329,7 @@ function aggiornaDopoInvio(b, threadId) {
     const l = leggi('lead').filter(x => x.id === b.rifId)[0]; if (!l) return;
     const up = { id: l.id, dataUltimoContatto: t, threadId: threadId || l.threadId };
     if (b.tipo === 'primo') Object.assign(up, { stato: 'contattato', dataPrimoContatto: t, followups: '0', prossimaAzione: 'Attendi risposta (follow-up automatico tra 3 giorni)', dataProssima: piuGiorni(t, 3) });
+    else if (b.tipo === 'vendita') Object.assign(up, { stato: b.azione === 'preventivo' ? 'preventivo' : b.azione === 'call' ? 'call' : 'risposto', prossimaAzione: b.azione === 'preventivo' ? 'Attendi firma del contratto' : 'Attendi risposta', dataProssima: piuGiorni(t, 3) });
     else Object.assign(up, { followups: String(parseInt(l.followups || '0', 10) + 1), prossimaAzione: 'Attendi risposta', dataProssima: piuGiorni(t, 4) });
     salva('lead', up);
   } else if (b.rifTipo === 'partner') {
@@ -328,33 +339,94 @@ function aggiornaDopoInvio(b, threadId) {
   }
 }
 
-/** Controlla le risposte nelle conversazioni Gmail degli invii. */
+/** Controlla le risposte nelle conversazioni Gmail e passa la trattativa al Venditore. */
+function mittente(m) { return ((m.getFrom().match(/<([^>]+)>/) || [, m.getFrom()])[1] || '').toLowerCase().trim(); }
+function pulisci(t) { return String(t || '').split(/\n\s*>|\nIl .* ha scritto:|\nOn .* wrote:|\n-{2,}\s*Messaggio originale/)[0].trim(); }
 function controllaRisposte() {
-  const io = [Session.getEffectiveUser().getEmail()].concat(GmailApp.getAliases()).map(s => s.toLowerCase());
-  let risposte = [], esclusi = 0;
-  const check = (tab, item, onReply) => {
-    if (!item.threadId) return;
-    let th; try { th = GmailApp.getThreadById(item.threadId); } catch (e) { return; }
+  const io = [Session.getEffectiveUser().getEmail()].concat(GmailApp.getAliases()).map(x => x.toLowerCase());
+  const avvisi = []; let esclusi = 0;
+  leggi('lead').filter(l => l.threadId && ['contattato','risposto','call','preventivo'].indexOf(l.stato) >= 0).forEach(l => {
+    let th; try { th = GmailApp.getThreadById(l.threadId); } catch (e) { return; }
     if (!th) return;
-    const altri = th.getMessages().filter(m => io.indexOf((m.getFrom().match(/<([^>]+)>/) || [, m.getFrom()])[1].toLowerCase().trim()) < 0);
+    const msgs = th.getMessages(), altri = msgs.filter(m => io.indexOf(mittente(m)) < 0);
+    const visti = parseInt(l.msgVisti || '0', 10);
+    if (altri.length <= visti) return;
+    const testo = pulisci(altri[altri.length - 1].getPlainBody());
+    leggi('bozze').filter(b => b.rifId === l.id && b.stato === 'da approvare').forEach(b => salva('bozze', { id: b.id, stato: 'scartata', errore: 'Superata da una nuova risposta' }));
+    if (/^\s*no\b/i.test(testo) || /non (mi|ci) (contatt|scriv)|cancellat|rimuov|non (siamo|sono) interessat/i.test(testo)) {
+      salva('lead', { id: l.id, stato: 'perso', msgVisti: String(altri.length), ultimaRisposta: testo.slice(0, 1000), prossimaAzione: 'Non interessato / non ricontattare', dataProssima: '' }); esclusi++; return;
+    }
+    salva('lead', { id: l.id, stato: l.stato === 'contattato' ? 'risposto' : l.stato, msgVisti: String(altri.length), ultimaRisposta: testo.slice(0, 1000) });
+    const conversazione = msgs.slice(-6).map(m => (io.indexOf(mittente(m)) >= 0 ? 'NOI: ' : 'CLIENTE: ') + pulisci(m.getPlainBody()).slice(0, 1200)).join('\n\n');
+    let esito = '';
+    try { esito = agenteVenditore(leggi('lead').filter(x => x.id === l.id)[0], conversazione); } catch (e) { esito = 'Venditore non disponibile: ' + e.message; }
+    avvisi.push(l.azienda + ' ha risposto: "' + testo.slice(0, 200) + '"\n→ ' + esito);
+  });
+  leggi('partner').filter(p => p.threadId && p.stato === 'contattato').forEach(p => {
+    let th; try { th = GmailApp.getThreadById(p.threadId); } catch (e) { return; }
+    const altri = th ? th.getMessages().filter(m => io.indexOf(mittente(m)) < 0) : [];
     if (!altri.length) return;
-    const testo = altri[altri.length - 1].getPlainBody().split(/\n\s*>|\nIl .* ha scritto:/)[0].trim();
-    onReply(testo);
-  };
-  leggi('lead').filter(l => l.stato === 'contattato').forEach(l => check('lead', l, testo => {
-    if (/^\s*no\b/i.test(testo) || /non (mi|ci) (contatt|scriv)|cancellat|rimuov/i.test(testo)) { salva('lead', { id: l.id, stato: 'perso', prossimaAzione: 'Ha chiesto di non essere contattato', dataProssima: '' }); esclusi++; }
-    else { salva('lead', { id: l.id, stato: 'risposto', prossimaAzione: 'Rispondi e proponi 2 orari per la call', dataProssima: oggi() }); risposte.push(l.azienda + ': ' + testo.slice(0, 160)); }
-    leggi('bozze').filter(b => b.rifId === l.id && b.stato === 'da approvare').forEach(b => salva('bozze', { id: b.id, stato: 'scartata', errore: 'Ha risposto' }));
-  }));
-  leggi('partner').filter(p => p.stato === 'contattato').forEach(p => check('partner', p, testo => {
     salva('partner', { id: p.id, stato: 'ha risposto', prossimaAzione: 'Fissa la call con il partner', dataProssima: oggi() });
-    risposte.push('PARTNER ' + p.nome + ': ' + testo.slice(0, 160));
-  }));
-  if (risposte.length) {
-    const to = config().EMAIL_NOTIFICHE || Session.getEffectiveUser().getEmail();
-    GmailApp.sendEmail(to, 'Motore Clienti: ' + risposte.length + ' nuove risposte', 'Hanno risposto:\n\n' + risposte.join('\n\n') + '\n\nApri il Motore Clienti: ' + ScriptApp.getService().getUrl());
+    avvisi.push('PARTNER ' + p.nome + ': ' + pulisci(altri[altri.length - 1].getPlainBody()).slice(0, 200));
+  });
+  if (config().MODALITA === 'AUTO') leggi('bozze').filter(b => b.stato === 'da approvare' && b.tipo === 'vendita' && b.richiedeApprovazione !== 'SI').forEach(b => { try { inviaBozza(b.id); } catch (e) {} });
+  if (avvisi.length) GmailApp.sendEmail(config().EMAIL_NOTIFICHE || Session.getEffectiveUser().getEmail(), 'Motore Clienti: ' + avvisi.length + ' trattative in movimento', avvisi.join('\n\n') + '\n\nApri il Motore Clienti: ' + ScriptApp.getService().getUrl());
+  scriviLog('Risposte', avvisi.length + ' risposte gestite, ' + esclusi + ' esclusioni');
+}
+
+function listinoTesto() {
+  return leggi('listino').map(r => '- ' + r.servizio + ': ' + (r.prezzo ? r.prezzo + ' € + IVA ' + (r.unita || '') : 'PREZZO NON IMPOSTATO') + (r.note ? ' (' + r.note + ')' : '')).join('\n');
+}
+
+/** Venditore: conduce la trattativa via email fino al preventivo e al contratto. */
+function agenteVenditore(l, conversazione) {
+  const c = config();
+  const prompt = 'Sei il commerciale di Santarelli Consulting e conduci la trattativa via email con questa azienda. Obiettivo: arrivare a un contratto firmato nel minor numero di scambi, senza pressioni.\n' +
+    'Azienda: ' + l.azienda + ' (' + (l.settore || '') + ', ' + (l.provincia || '') + '). Segnale: ' + (l.segnale || 'n.d.') + '. Servizio probabile: ' + (l.servizio || 'n.d.') + '. Fase attuale: ' + l.stato + '. Note: ' + (l.note || '') + '\n\n' +
+    'LISTINO (usa SOLO questi prezzi, mai inventarne):\n' + listinoTesto() + '\n\n' +
+    'Sara lavora come dipendente 9-18: se serve una call proponi solo ' + c.ORARI_CALL + '. Preferisci chiudere per email. Un DVR o una valutazione incendio richiedono un sopralluogo: in quel caso proponi il sopralluogo come primo passo.\n\n' +
+    'CONVERSAZIONE (ultimi messaggi):\n' + conversazione + '\n\n' +
+    'Decidi la mossa migliore e rispondi SOLO con un blocco ```json con un oggetto: {"azione": uno tra "domande" (mancano dati: chiedi al massimo 3 cose: numero addetti, cosa è già in regola, scadenze), "call" (proponi 2 orari), "preventivo" (hai abbastanza dati e i prezzi del servizio sono nel listino), "accettato" (il cliente ha accettato il preventivo), "chiudi" (non interessato), ' +
+    '"oggetto": "Re: ...", "corpo": testo della risposta senza firma (massimo 140 parole; per "preventivo" includi le voci con quantità e prezzi dal listino, totale + IVA, cosa è incluso, tempi, e scrivi che in allegato c\'è il contratto d\'incarico da firmare), "servizio": "...", "voci": [{"descrizione":"...","quantita":1,"prezzoUnitario":0}], "totale": 0, "notaPerSara": "cosa deve sapere Sara in una riga"}. ' +
+    'Se il servizio richiesto non ha prezzo nel listino, NON scegliere "preventivo": scegli "domande" e scrivi in notaPerSara quale prezzo manca.';
+  const r = (estraiJSON('[' + (ai(prompt, false).match(/\{[\s\S]*\}/) || ['{}'])[0] + ']') || [])[0] || {};
+  const az = r.azione || 'domande';
+  if (az === 'chiudi') { salva('lead', { id: l.id, stato: 'perso', prossimaAzione: 'Non interessato', dataProssima: '' }); return 'chiusa come non interessata'; }
+  if (az === 'accettato') {
+    salva('lead', { id: l.id, stato: 'preventivo', prossimaAzione: 'HA ACCETTATO: firma il contratto e rimandalo controfirmato', dataProssima: oggi() });
+    return 'HA ACCETTATO il preventivo. Firma il contratto ricevuto e segna la scheda come "Contratto firmato". ' + (r.notaPerSara || '');
   }
-  scriviLog('Risposte', risposte.length + ' risposte, ' + esclusi + ' richieste di esclusione');
+  let allegato = '';
+  if (az === 'preventivo') {
+    allegato = creaContratto(l, r);
+  }
+  salva('bozze', { rifTipo: 'lead', rifId: l.id, tipo: 'vendita', a: l.email, oggetto: r.oggetto || 'Re: sicurezza sul lavoro', corpo: (r.corpo || '').trim(), stato: 'da approvare', creata: oggi(), azione: az, allegato: allegato,
+    richiedeApprovazione: az === 'preventivo' ? 'SI' : 'NO', errore: r.notaPerSara || '' });
+  salva('lead', { id: l.id, prossimaAzione: az === 'preventivo' ? 'Controlla preventivo e contratto, poi approva' : 'Risposta pronta (' + az + ')', dataProssima: oggi(), servizio: r.servizio || l.servizio, valore: r.totale ? String(r.totale) : l.valore });
+  return az === 'preventivo' ? 'preventivo e contratto pronti da approvare (' + (r.totale || '?') + ' € + IVA)' : 'risposta pronta (' + az + ')' + (r.notaPerSara ? '. Nota: ' + r.notaPerSara : '');
+}
+
+/** Crea il contratto d'incarico in Google Documenti dal modello. Restituisce l'id del documento. */
+function creaContratto(l, r) {
+  const c = config();
+  const voci = (r.voci || []).map(v => '- ' + v.descrizione + ' · quantità ' + v.quantita + ' · ' + v.prezzoUnitario + ' € + IVA cad.').join('\n') || '- ' + (r.servizio || l.servizio);
+  const doc = DocumentApp.create('Contratto ' + l.azienda + ' ' + oggi());
+  const b = doc.getBody();
+  b.appendParagraph('CONTRATTO DI INCARICO PROFESSIONALE').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  b.appendParagraph('Tra ' + c.CONTRAENTE + ' (di seguito "Consulente")\ne ' + l.azienda + (l.sito ? ' (' + l.sito + ')' : '') + ', sede: ____________________, P.IVA ____________________, in persona del legale rappresentante ____________________ (di seguito "Cliente").');
+  b.appendParagraph('1. Oggetto').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  b.appendParagraph('Il Cliente affida al Consulente le seguenti prestazioni in materia di salute e sicurezza sul lavoro (D.Lgs. 81/08):\n' + voci);
+  b.appendParagraph('2. Corrispettivo e pagamento').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  b.appendParagraph('Corrispettivo complessivo: ' + (r.totale || '______') + ' € oltre IVA. ' + c.PAGAMENTO);
+  b.appendParagraph('3. Tempi e modalità').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  b.appendParagraph('Le attività iniziano entro 15 giorni dalla firma, in date concordate. Il Cliente fornisce le informazioni e l\'accesso ai luoghi necessari. Per formazione: attestati rilasciati al superamento della verifica finale.');
+  b.appendParagraph('4. Durata e recesso').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  b.appendParagraph('Per prestazioni una tantum il contratto termina con la consegna. Per servizi continuativi durata 12 mesi, con recesso scritto con 30 giorni di preavviso.');
+  b.appendParagraph('5. Riservatezza e dati personali').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  b.appendParagraph('Le parti trattano i dati personali nel rispetto del Regolamento UE 2016/679. Il Consulente mantiene riservate le informazioni del Cliente.');
+  b.appendParagraph('Data ____________\n\nIl Consulente ____________________\t\tIl Cliente (timbro e firma) ____________________');
+  doc.saveAndClose();
+  return doc.getId();
 }
 
 /** Riepilogo delle 12:30: cosa approvare oggi. */
@@ -411,7 +483,7 @@ function azioniOggi() {
 function api_carica() {
   const c = config();
   return { lead: leggi('lead'), partner: leggi('partner'), scadenze: leggi('scadenze'), bozze: leggi('bozze').filter(b => b.stato === 'da approvare'), log: leggi('log').slice(-30).reverse(),
-    stat: statistiche(), azioni: azioniOggi(), config: c, haChiave: !!chiaveAI(), inviatiOggi: inviatiOggi(), url: ScriptApp.getService().getUrl() };
+    stat: statistiche(), azioni: azioniOggi(), listino: leggi('listino'), config: c, haChiave: !!chiaveAI(), inviatiOggi: inviatiOggi(), url: ScriptApp.getService().getUrl() };
 }
 function api_salva(k, obj) {
   if (['lead','partner','scadenze'].indexOf(k) < 0) throw new Error('Archivio non valido');
@@ -460,4 +532,12 @@ function api_impostazioni(cfg, chiave) {
   if (chiave) PropertiesService.getScriptProperties().setProperty('AI_KEY', String(chiave).trim());
   return api_carica();
 }
+function api_listino(righe) {
+  const sh = foglio('listino');
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 4).clearContent();
+  const v = (righe || []).filter(r => r.servizio).map(r => [r.servizio, String(r.prezzo || ''), r.unita || '', r.note || '']);
+  if (v.length) sh.getRange(2, 1, v.length, 4).setValues(v);
+  return api_carica();
+}
+function api_contrattoUrl(id) { return 'https://docs.google.com/document/d/' + id + '/edit'; }
 function api_provaAI() { return ai('Rispondi solo con: "Collegamento AI funzionante."', false); }
