@@ -11,7 +11,7 @@
 
 const VERSIONE = '1.0';
 const TAB = {
-  lead: ['id','azienda','settore','provincia','contatto','email','telefono','sito','canale','servizio','stato','valore','segnale','fonte','prossimaAzione','dataProssima','note','dataPrimoContatto','dataUltimoContatto','dataContratto','threadId','followups','msgVisti','ultimaRisposta','createdAt','updatedAt'],
+  lead: ['id','azienda','settore','provincia','contatto','email','telefono','sito','canale','servizio','stato','valore','segnale','fonte','prossimaAzione','dataProssima','note','dataPrimoContatto','dataUltimoContatto','dataContratto','threadId','followups','msgVisti','ultimaRisposta','emailVerificata','fonteEmail','createdAt','updatedAt'],
   partner: ['id','nome','tipo','citta','referente','email','telefono','sito','stato','segnalate','prossimaAzione','dataProssima','note','fonte','threadId','createdAt','updatedAt'],
   scadenze: ['id','cliente','email','adempimento','dataScadenza','persone','note','stato','propostaInviata','createdAt','updatedAt'],
   bozze: ['id','rifTipo','rifId','tipo','a','oggetto','corpo','stato','creata','inviata','errore','azione','allegato','richiedeApprovazione'],
@@ -34,6 +34,7 @@ const CONFIG_DEFAULT = {
   AI_MODELLO: 'gemini-2.5-flash',
   CONTRAENTE: 'Santarelli Consulting di Sara Santarelli, P.IVA 01257820579',
   PAGAMENTO: 'Pagamento: 50% alla firma, saldo alla consegna, con bonifico bancario a 30 giorni data fattura.',
+  FOCUS: 'Pacchetto Antincendio: valutazione del rischio incendio aggiornata ai decreti del 2021 (molte aziende hanno ancora documenti basati sul DM 10/03/1998, abrogato), piano di emergenza ed evacuazione, corso addetti antincendio',
   ATTIVO: 'SI'
 };
 
@@ -170,7 +171,7 @@ function separaOggetto(t) {
 /* ═════════════ AGENTI ═════════════ */
 function agenteMattino() {
   if (config().ATTIVO !== 'SI') return;
-  const fasi = [controllaRisposte, agenteCercatore, agenteCercatorePartner, agenteRedattore, agenteRimandatore, agenteScadenziere];
+  const fasi = [controllaRimbalzi, controllaRisposte, agenteCercatore, agenteCercatorePartner, agenteRedattore, agenteRimandatore, agenteScadenziere];
   fasi.forEach(f => { try { f(); } catch (e) { scriviLog(f.name, 'Errore: ' + e.message); } });
 }
 
@@ -184,7 +185,7 @@ function agenteCercatore() {
   const sett = c.SETTORI.split(',').map(s => s.trim()).filter(Boolean);
   const g = Math.floor(Date.now() / 864e5);
   const p = prov[g % prov.length], s = sett[Math.floor(g / prov.length) % sett.length];
-  const prompt = 'Usa la ricerca Google. Trova fino a ' + target + ' aziende REALI con sede o stabilimento a ' + p + ' o nei comuni confinanti (zona est Milano / Martesana, massimo 15 km da Cassina de\' Pecchi), settore ' + s + ', da 5 a 150 dipendenti, che mostrano un SEGNALE di bisogno di sicurezza sul lavoro negli ultimi 3 mesi: annunci di lavoro attivi (nuovi assunti da formare), apertura di nuova sede o capannone, ampliamento, cantiere avviato. ' +
+  const prompt = 'Usa la ricerca Google. Trova fino a ' + target + ' aziende REALI con sede o stabilimento a ' + p + ' o nei comuni confinanti (zona est Milano / Martesana, massimo 15 km da Cassina de\' Pecchi), settore ' + s + ', da 5 a 150 dipendenti, che mostrano un SEGNALE di bisogno di sicurezza sul lavoro e in particolare di prevenzione incendi negli ultimi 3 mesi (magazzini, depositi, produzione, locali aperti al pubblico): annunci di lavoro attivi (nuovi assunti da formare), apertura di nuova sede o capannone, ampliamento, cantiere avviato. ' +
     'Per ognuna riporta solo dati pubblici trovati su fonti verificabili: email aziendale generica (info@, amministrazione@, ecc.) SOLO se compare sul sito ufficiale, altrimenti stringa vuota; mai email personali. ' +
     'Rispondi SOLO con un blocco ```json contenente un array di oggetti con chiavi: azienda, settore, provincia, sito, email, telefono, segnale (frase breve e concreta), fonte (URL dove hai visto il segnale), servizio (uno tra: Corso lavoratori, Corso preposti, Corso datore di lavoro, Antincendio (corso), Antincendio (VRI + piano emergenza), DVR, RSPP esterno). Non inventare aziende: se non trovi abbastanza risultati restituisci meno elementi.';
   const trovati = estraiJSON(ai(prompt, true));
@@ -192,12 +193,56 @@ function agenteCercatore() {
   let n = 0;
   trovati.forEach(t => {
     if (!t || !t.azienda || esistenti.indexOf(norm(t.azienda)) >= 0) return;
-    const email = /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(t.email || '') ? t.email.trim() : '';
-    salva('lead', { azienda: t.azienda, settore: t.settore || s, provincia: t.provincia || p, sito: t.sito || '', email: email, telefono: t.telefono || '', segnale: t.segnale || '', fonte: t.fonte || '', servizio: t.servizio || '', canale: 'segnale', stato: 'nuovo', followups: '0',
+    const ver = verificaEmail(t.sito, t.email);
+    const email = ver ? ver.email : '';
+    salva('lead', { azienda: t.azienda, settore: t.settore || s, provincia: t.provincia || p, sito: t.sito || '', email: email, emailVerificata: ver ? 'SI' : 'NO', fonteEmail: ver ? ver.fonte : '', telefono: t.telefono || '', segnale: t.segnale || '', fonte: t.fonte || '', servizio: t.servizio || '', canale: 'segnale', stato: 'nuovo', followups: '0',
       prossimaAzione: email ? 'Approva il primo messaggio' : 'Trova email o telefona', dataProssima: oggi() });
     esistenti.push(norm(t.azienda)); n++;
   });
   scriviLog('Cercatore', n + ' nuove aziende (' + s + ', ' + p + ')');
+}
+
+/** Verifica che l'email esista davvero sul sito ufficiale e che il dominio riceva posta. */
+function verificaEmail(sito, emailProposta) {
+  if (!sito) return null;
+  let base = String(sito).trim(); if (!/^https?:\/\//i.test(base)) base = 'https://' + base;
+  base = base.replace(/\/+$/, '');
+  const pagine = [base, base + '/contatti', base + '/contatti/', base + '/contattaci', base + '/contact', base + '/chi-siamo'];
+  const trovate = {};
+  for (let i = 0; i < pagine.length; i++) {
+    try {
+      const r = UrlFetchApp.fetch(pagine[i], { muteHttpExceptions: true, followRedirects: true, validateHttpsCertificates: false });
+      if (r.getResponseCode() !== 200) continue;
+      const html = r.getContentText().replace(/&#64;|\[at\]|\(at\)/gi, '@');
+      (html.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) || []).forEach(e => { e = e.toLowerCase(); if (!/\.(png|jpe?g|gif|svg|webp)$/.test(e) && !/example|sentry|wixpress|domain\.com/.test(e)) trovate[e] = trovate[e] || pagine[i]; });
+    } catch (e) {}
+    if (Object.keys(trovate).length && i >= 1) break;
+  }
+  const lista = Object.keys(trovate);
+  if (!lista.length) return null;
+  const prop = String(emailProposta || '').toLowerCase().trim();
+  const generiche = lista.filter(e => /^(info|amministrazione|segreteria|ufficio|commerciale|contatti|direzione|hr|personale|risorse\.?umane|qualita|sicurezza)[@.]/.test(e));
+  const scelta = lista.indexOf(prop) >= 0 ? prop : (generiche[0] || '');
+  if (!scelta) return null;
+  if (!dominioRicevePosta(scelta.split('@')[1])) return null;
+  return { email: scelta, fonte: trovate[scelta] };
+}
+function dominioRicevePosta(dom) {
+  try {
+    const r = UrlFetchApp.fetch('https://dns.google/resolve?type=MX&name=' + encodeURIComponent(dom), { muteHttpExceptions: true });
+    const j = JSON.parse(r.getContentText());
+    return !!(j.Answer && j.Answer.length);
+  } catch (e) { return true; }
+}
+/** Rimbalzi: se un'email torna indietro, la scheda viene marcata e non si riscrive. */
+function controllaRimbalzi() {
+  const th = GmailApp.search('from:(mailer-daemon OR postmaster) newer_than:7d', 0, 30);
+  const leads = leggi('lead'); let n = 0;
+  th.forEach(t => t.getMessages().forEach(m => {
+    const body = m.getPlainBody().toLowerCase();
+    leads.forEach(l => { if (l.email && l.emailVerificata !== 'RIMBALZATA' && body.indexOf(l.email.toLowerCase()) >= 0) { salva('lead', { id: l.id, emailVerificata: 'RIMBALZATA', stato: l.stato === 'contattato' ? 'nuovo' : l.stato, prossimaAzione: 'Email non valida: telefona o trova un altro indirizzo', dataProssima: oggi() }); l.emailVerificata = 'RIMBALZATA'; n++; } });
+  }));
+  if (n) scriviLog('Rimbalzi', n + ' indirizzi non validi segnati');
 }
 
 /** Cercatore partner: il lunedì cerca studi e aziende che possono segnalare clienti. */
@@ -215,7 +260,8 @@ function agenteCercatorePartner(forza) {
   let n = 0;
   trovati.forEach(t => {
     if (!t || !t.nome || esistenti.indexOf(norm(t.nome)) >= 0) return;
-    const email = /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(t.email || '') ? t.email.trim() : '';
+    const ver = verificaEmail(t.sito, t.email);
+    const email = ver ? ver.email : '';
     const id = salva('partner', { nome: t.nome, tipo: t.tipo || tipo, citta: t.citta || p, sito: t.sito || '', email: email, telefono: t.telefono || '', fonte: t.fonte || '', stato: 'da contattare', segnalate: '0', prossimaAzione: email ? 'Approva la proposta' : 'Telefona allo studio', dataProssima: oggi() });
     if (email) creaBozzaPartner(id);
     esistenti.push(norm(t.nome)); n++;
@@ -228,7 +274,7 @@ function haBozzaAperta(rifId, tipo) { return leggi('bozze').some(b => b.rifId ==
 /** Redattore: scrive il primo messaggio per ogni azienda nuova con email. */
 function agenteRedattore() {
   let n = 0;
-  leggi('lead').filter(l => l.stato === 'nuovo' && l.email).forEach(l => {
+  leggi('lead').filter(l => l.stato === 'nuovo' && l.email && l.emailVerificata !== 'NO').forEach(l => {
     if (haBozzaAperta(l.id, 'primo') || n >= 15) return;
     try { creaBozzaLead(l, 'primo'); n++; } catch (e) { scriviLog('Redattore', l.azienda + ': ' + e.message); }
   });
@@ -238,7 +284,7 @@ function agenteRedattore() {
 function creaBozzaLead(l, tipo) {
   const ctx = 'Azienda: ' + l.azienda + '. Settore: ' + (l.settore || 'n.d.') + '. Provincia: ' + (l.provincia || 'n.d.') + '. Servizio probabile: ' + (l.servizio || 'n.d.') + '. Segnale di bisogno: ' + (l.segnale || 'nessuno') + '. Note: ' + (l.note || 'nessuna') + '.';
   const P = {
-    primo: 'Scrivi la PRIMA email a questa azienda (massimo 90 parole). Apri citando il segnale di bisogno in modo naturale (se manca, il settore). Offri la verifica gratuita di 30 minuti. Una sola domanda finale. Formato: prima riga "Oggetto: ...", poi il corpo.',
+    primo: 'Scrivi la PRIMA email a questa azienda (massimo 90 parole). Apri citando il segnale di bisogno in modo naturale (se manca, il settore). Prodotto da proporre: ' + config().FOCUS + '. Offri un controllo gratuito del documento antincendio attuale (ci mandano la loro valutazione e diciamo in 48 ore se è aggiornata). Una sola domanda finale. Formato: prima riga "Oggetto: ...", poi il corpo.',
     followup1: 'Scrivi un FOLLOW-UP breve (massimo 60 parole) a una email inviata qualche giorno fa senza risposta. Aggiungi un elemento utile nuovo: lo scadenziario gratuito della formazione (l\'azienda manda gli attestati e riceve il calendario delle scadenze). Formato: "Oggetto: ..." poi corpo.',
     followup2: 'Scrivi un ULTIMO messaggio cortese (massimo 45 parole): chiudi il contatto lasciando la porta aperta e il numero di telefono. Formato: "Oggetto: ..." poi corpo.'
   };
