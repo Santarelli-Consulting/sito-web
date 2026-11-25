@@ -13,7 +13,7 @@ function useSEO(title, desc, path) {
     }
     let c = document.querySelector('link[rel="canonical"]');
     if (!c) { c = document.createElement('link'); c.setAttribute('rel', 'canonical'); document.head.appendChild(c); }
-    c.setAttribute('href', 'https://www.santarelliconsulting.it' + (path ? '/' + path : window.location.pathname));
+    c.setAttribute('href', 'https://consultingsantarelli.it' + (path ? '/' + path : window.location.pathname));
   }, [title, desc, path]);
 }
 
